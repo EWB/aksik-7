@@ -25,8 +25,6 @@
 
         // instantiate our new map
         var lMap = new L.Map(this.mapId, settings);
-        var fullScreen = new L.Control.FullScreen();
-        lMap.addControl(fullScreen);
         lMap.bounds = [];
 
         // add map layers
@@ -45,9 +43,10 @@
           i++;
         }
 
-        // @RdB create a marker cluster layer if leaflet.markercluster.js is included
-        var cluster_layer = null;
-        if (typeof L.MarkerClusterGroup != 'undefined') {
+        // @RdB create marker cluster layers if leaflet.markercluster.js is included
+        // There will be one cluster layer for each "clusterGroup".
+        var clusterLayers = {};
+        if (typeof L.MarkerClusterGroup !== 'undefined') {
 
           // If we specified a custom cluster icon, use that.
           if (this.map.markercluster_icon) {
@@ -79,16 +78,21 @@
               return icon;
             }
           }
-
-          // Note: only applicable settings will be used, remainder are ignored
-          cluster_layer = new L.MarkerClusterGroup(settings);
-          lMap.addLayer(cluster_layer);
         }
 
         // add features
         for (i = 0; i < this.features.length; i++) {
           var feature = this.features[i];
-          var cluster = (feature.type == 'point') && (!feature.flags || !(feature.flags & LEAFLET_MARKERCLUSTER_EXCLUDE_FROM_CLUSTER));
+         
+          var cluster = (feature.type === 'point') && (!feature.flags || !(feature.flags & LEAFLET_MARKERCLUSTER_EXCLUDE_FROM_CLUSTER));
+          if (cluster) {
+            var clusterGroup = feature.clusterGroup ? feature.clusterGroup : 'global';
+            if (!clusterLayers[clusterGroup]) {
+              // Note: only applicable settings will be used, remainder are ignored
+              clusterLayers[clusterGroup] = new L.MarkerClusterGroup(settings);
+              lMap.addLayer(clusterLayers[clusterGroup]);
+            }
+          }
           var lFeature;
 
           // dealing with a layer group
@@ -97,6 +101,7 @@
             for (var groupKey in feature.features) {
               var groupFeature = feature.features[groupKey];
               lFeature = leaflet_create_feature(groupFeature, lMap);
+              lFeature.options.regions = feature.regions;
               if (groupFeature.popup) {
                 lFeature.bindPopup(groupFeature.popup);
               }
@@ -106,8 +111,8 @@
             // add the group to the layer switcher
             overlays[feature.label] = lGroup;
 
-            if (cluster_layer && cluster)  {
-              cluster_layer.addLayer(lGroup);
+            if (cluster && clusterLayers[clusterGroup])  {
+              clusterLayers[clusterGroup].addLayer(lGroup);
             } else {
               lMap.addLayer(lGroup);
             }
@@ -115,8 +120,9 @@
           else {
             lFeature = leaflet_create_feature(feature, lMap);
             // @RdB add to cluster layer if one is defined, else to map
-            if (cluster_layer && cluster) {
-              cluster_layer.addLayer(lFeature);
+            if (cluster && clusterLayers[clusterGroup]) {
+              lFeature.options.regions = feature.regions;
+              clusterLayers[clusterGroup].addLayer(lFeature);
             }
             else {
               lMap.addLayer(lFeature);
@@ -213,6 +219,6 @@
       }
 
     }
-  }
+  };
 
 })(jQuery);
